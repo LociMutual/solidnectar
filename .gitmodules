@@ -1,0 +1,3 @@
+[submodule "abdk-libraries-solidity"]
+	path = abdk-libraries-solidity
+	url = git@github.com:abdk-consulting/abdk-libraries-solidity.git

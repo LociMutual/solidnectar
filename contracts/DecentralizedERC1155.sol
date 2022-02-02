@@ -4,18 +4,18 @@ pragma solidity ^0.8.2;
 
 // https://soenkeba.medium.com/truly-decentralized-nfts-by-erc-1155-b9be28db2aae
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 
 /** 
  * @title DecentralizedERC1155
  * @dev Accounts for multiple tokens backed by multiple forms of tokenized collateral.
  */
-contract DecentralizedERC1155 is ERC1155 {
+contract DecentralizedERC1155 is ERC1155Supply {
     constructor() ERC1155("ipfs://f0{id}") {}
 
     /**
      * @dev Returns the URI for token type `id`.
-     * @param id The token's ID.
+     * @param _id The token's ID.
      * @return The URI for the token.
      */
     function uri(uint256 _id)

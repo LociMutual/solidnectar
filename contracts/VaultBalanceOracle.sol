@@ -5,14 +5,13 @@ pragma solidity ^0.8.2;
 // https://soenkeba.medium.com/truly-decentralized-nfts-by-erc-1155-b9be28db2aae
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "./DecentralizedERC1155.sol";
 
 /** 
  * @title VaultBalanceOracle
  * @dev Coordinates the evidence of a balance in a physical vault.
  */
-contract VaultBalanceOracle is DecentralizedERC1155, ERC1155Supply, AccessControl {
+contract VaultBalanceOracle is DecentralizedERC1155, AccessControl {
     bytes32 public constant GOV_ROLE = keccak256("GOV_ROLE");
     bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
 
@@ -30,14 +29,14 @@ contract VaultBalanceOracle is DecentralizedERC1155, ERC1155Supply, AccessContro
         _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
         // Certain roles must be voted by Governor.
-        _setRoleAdmin(FIAT_CASHIER_ROLE, GOV_ROLE);
+        _setRoleAdmin(AUDITOR_ROLE, GOV_ROLE);
     }
 
-    function report(uint256 vaultID, uint256 assetID, uint256 proofId, uint256 balance)
+    function report(uint256 vaultID, uint256 assetID, uint256 proofID, uint256 balance)
         public
         onlyRole(AUDITOR_ROLE)
     {
-        uint256 supply = totalSupply(vaultId);
+        uint256 supply = totalSupply(vaultID);
     
         // The totalSupply(vaultID) tracks the real world fiat vault balance.
         // with all tokens owned by this contract.  Only the totalSupply(vaultID)
@@ -53,8 +52,8 @@ contract VaultBalanceOracle is DecentralizedERC1155, ERC1155Supply, AccessContro
         }
         else if (balance < supply) {
             uint256 decrease = supply - balance;
-            _burn(address(this), vaultID, decrease, ""); // for the specific vault
-            _burn(address(this), assetID, decrease, ""); // total of all vaults contributing to the asset
+            _burn(address(this), vaultID, decrease); // for the specific vault
+            _burn(address(this), assetID, decrease); // total of all vaults contributing to the asset
         }
         
         // There is one unique proof for this report owned by the auditor/sender.
@@ -62,5 +61,15 @@ contract VaultBalanceOracle is DecentralizedERC1155, ERC1155Supply, AccessContro
         _mint(_msgSender(), proofID, 1, "");
 
         emit Report(_msgSender(), vaultID, assetID, proofID, balance);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(ERC1155, AccessControl)
+        returns (bool)
+    {
+        return ERC1155.supportsInterface(interfaceId) || AccessControl.supportsInterface(interfaceId);
     }
 }

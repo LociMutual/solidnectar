@@ -2,15 +2,15 @@
 
 pragma solidity ^0.8.2;
 
-import "@openzeppelin/governance/Governor.sol";
-import "@openzeppelin/governance/compatibility/GovernorCompatibilityBravo.sol";
-import "@openzeppelin/governance/extensions/GovernorVotes.sol";
-import "@openzeppelin/governance/extensions/GovernorVotesQuorumFraction.sol";
-import "@openzeppelin/governance/extensions/GovernorTimelockControl.sol";
+import "@openzeppelin/contracts/governance/Governor.sol";
+import "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
+import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 
 contract LGGovernor is Governor, GovernorCompatibilityBravo, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
     constructor(ERC20Votes _token, TimelockController _timelock)
-        Governor("LGGov")
+        Governor("LG_Governor")
         GovernorVotes(_token)
         GovernorVotesQuorumFraction(4)
         GovernorTimelockControl(_timelock)
