@@ -68,12 +68,12 @@ contract Auction is AccessControl, Pausable {
         auctionSupplyRemaining[currentAuction] = available;
     }
 
-    function setDestination(address payable _destAddress)
+    function setDestination(address payable destAddress_)
         public
         onlyRole(AUCTIONEER_ROLE)
     {
-        require(address(_destAddress) != address(0), "invalid _destAddress");
-        destAddress = _destAddress;
+        require(address(destAddress_) != address(0), "invalid destAddress_");
+        destAddress = destAddress_;
     }
 
     receive()
@@ -99,7 +99,6 @@ contract Auction is AccessControl, Pausable {
 
     function claim()
         external
-        whenNotPaused
         returns (uint value)
     {
         _checkpoint();
@@ -128,14 +127,13 @@ contract Auction is AccessControl, Pausable {
         }
     }
 
-    function impliedPriceEWMA(bool includeCurrentEra) public view returns (uint) {
-        if (ewma == 0 || includeCurrentEra) {
-            uint price = 10**9 * (auctionUnits[currentAuction] / (auctionSupply[currentAuction] / 10**9));
-			return ewma == 0 ? price : (3 * price + 2 * ewma) / 5; // apha = 0.6
-        }
-        else {
-            return ewma;
-        }
+    function impliedPriceEWMA(bool includeCurrent) public view returns (uint) {
+        return ewma == 0 || includeCurrent ? computeEWMA() : ewma;
+    }
+
+    function computeEWMA() public view returns (uint) {
+        uint price = 10**9 * (auctionUnits[currentAuction] / (auctionSupply[currentAuction] / 10**9));
+		return ewma == 0 ? price : (7 * price + 3 * ewma) / 10; // alpha = 0.7
     }
 
     function checkpoint() external {
@@ -165,8 +163,7 @@ contract Auction is AccessControl, Pausable {
             uint units = auctionUnits[currentAuction];
             uint emission = auctionSupply[currentAuction];
 			if (units > 0) {
-				uint price = 10**9 * (units / (emission / 10**9));
-				ewma = ewma == 0 ? price : (3 * price + 2 * ewma) / 5; // apha = 0.6
+				ewma = computeEWMA();
 			}
             uint members = auctionMemberCount[currentAuction];
             currentAuctionEndTime = block.timestamp + secondsPerAuction;

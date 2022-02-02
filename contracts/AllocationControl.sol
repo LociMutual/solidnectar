@@ -51,8 +51,8 @@ abstract contract AllocationControl is AccessControl {
         if (_roles.contains(role)) {
             // existing
             if (_allocations[role].minted > 0) {
-                require(_allocations[role].minted <= units, "reallocation must include already minted slice");
-                require(_allocations[role].tokenId == tokenId, "cannot change allocation's tokenId if already minted");
+                require(units >= _allocations[role].minted, "reallocation must include already minted slice");
+                require(tokenId == _allocations[role].tokenId, "cannot change allocation's tokenId if already minted");
             }
             _totalSupplyCap -= _allocations[role].units;
             _supplyCapPerTokenId[tokenId] -= _allocations[role].units;

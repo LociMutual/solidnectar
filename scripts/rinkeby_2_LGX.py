@@ -8,7 +8,7 @@ def main():
     singletonFactory = '0xce0042B868300000d44A59004Da54A005ffdcf9f'
     wrapped1155Factory = '0xdBaB2d2F2b8e74CDeFCbD0fBeC138177E65AE9e5'
 
-    governor = '0x24cAc427c956a086bd975Aa718f0B271e7778FEf'
+    governor = '0x167975F759e9fC3C5f176Aa7648Bc89FD510c410'
     deployer = accounts.load('core_account')
     lg = LG[-1]
     auction = Auction[-1]

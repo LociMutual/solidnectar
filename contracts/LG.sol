@@ -22,24 +22,26 @@ contract LG is ERC1155Votes, AccessControl, AllocationControl, EmissionCurves, I
     bytes32 public constant RESERVED_ALLOCATION  = keccak256("RESERVED_ALLOCATION");
 
     constructor(address governor, string memory baseURI)
-        ERC1155Votes("Loci Global", "LG3", baseURI, 2)
+        ERC1155Votes("Loci Global", "LG4", baseURI, 2)
         AllocationControl(governor)
         EmissionCurves(governor)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, governor);
 
         allocationAllocate(LGY_ALLOCATION,       1,     350_000 * 1e18);
-        allocationAllocate(AUCTION22_ALLOCATION, 0,  22_000_000 * 1e18);
-        allocationAllocate(RESERVED_ALLOCATION,  0, 418_650_000 * 1e18);
+        allocationAllocate(AUCTION22_ALLOCATION, 0,  99_000_000 * 1e18);
+        allocationAllocate(RESERVED_ALLOCATION,  0, 341_650_000 * 1e18);
 
         require(allocationTotalSupplyCap()       == 441_000_000 * 1e18);
         require(allocationSupplyCapPerTokenId(0) == 440_650_000 * 1e18);
         require(allocationSupplyCapPerTokenId(1) ==     350_000 * 1e18);
 
-        setCurve(AUCTION22_ALLOCATION, block.timestamp,
-                3600, 30,  // 1 hour ramp-up e^3.0x
-               86400,      // 1 day of max emissions
-           7 * 86400, 30); // 1 week of decay e^-3.0x
+        setCurve(
+            AUCTION22_ALLOCATION,
+            block.timestamp,
+                 3600, 30,  // 1 hour ramp-up e^3.0x
+                86400,      // 1 day of max emissions
+            7 * 86400, 30); // 1 week of decay e^-3.0x
     }
 
     function setURI(string memory newURI) public {
@@ -68,7 +70,8 @@ contract LG is ERC1155Votes, AccessControl, AllocationControl, EmissionCurves, I
         onlyRole(role)
     {
         Slice memory slice = allocationSlice(role);
-        uint256 available = calcGrowth(role, block.timestamp).mulu(slice.units * 1e5) / 1e5 - slice.minted;
+        uint total = calcGrowth(role, block.timestamp).mulu(slice.units * 1e5) / 1e5;
+        uint256 available = total > slice.minted ? total - slice.minted : 0;
         require(amount <= available, "amount exceeds emissions available");
         _onAllocationMint(role, amount);
         _mint(to, slice.tokenId, amount, "");
@@ -86,7 +89,8 @@ contract LG is ERC1155Votes, AccessControl, AllocationControl, EmissionCurves, I
         returns (uint256)
     {
         Slice memory slice = allocationSlice(role);
-        return calcGrowth(role, block.timestamp).mulu(slice.units * 1e5) / 1e5 - slice.minted;
+        uint total = calcGrowth(role, block.timestamp).mulu(slice.units * 1e5) / 1e5;
+        return total > slice.minted ? total - slice.minted : 0;
     }
 
     function allocationMinted(bytes32 role)
