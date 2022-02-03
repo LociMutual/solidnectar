@@ -42,9 +42,25 @@ def test_curve(admin, adminSig, governorSig, lg):
     with reverts():
         lg.allocationMint(admin, AUCTION, 1e28, adminSig)
 
+    chain.sleep(3600)
     # there should be at least a few hundred ready to mint
     lg.allocationMint(admin, AUCTION, 1e18, adminSig)
     assert lg.balanceOf(admin) == 1e18
+
+
+def test_recm_growth(lg):
+    AUCTION = lg.RECM_ALLOCATION()
+    n = 0
+    while True:
+        assert n <= 5 * 52 # 5 years of weeks
+
+        n += 1
+        available = lg.allocationAvailable(AUCTION)
+        print(available/1e18)
+        if available == lg.allocationUnits(AUCTION):
+            break
+        chain.sleep(7 * 86400)
+        chain.mine()
 
 
 def test_growth(lg):

@@ -63,7 +63,7 @@ contract EmissionCurves is AccessControl {
         public
         onlyRole(EMISSION_ROLE)
     {
-        _setCurve(
+        _setCurve64x64(
             role,
             timeStart.fromUInt(),
             uint256(durationGrowth).fromUInt(),
@@ -74,6 +74,27 @@ contract EmissionCurves is AccessControl {
     }
 
     function _setCurve(
+        bytes32 role,
+        uint256 timeStart,
+        uint32 durationGrowth,
+        uint8 expGrowth,
+        uint32 durationMax,
+        uint32 durationDecay,
+        uint8 expDecay
+    )
+        internal
+    {
+        _setCurve64x64(
+            role,
+            timeStart.fromUInt(),
+            uint256(durationGrowth).fromUInt(),
+            uint256(expGrowth).fromUInt().div(uint256(10).fromUInt()),
+            uint256(durationMax).fromUInt(),
+            uint256(durationDecay).fromUInt(),
+            uint256(expDecay).fromUInt().div(uint256(10).fromUInt()));
+    }
+
+    function _setCurve64x64(
         bytes32 role,
         int128 timeStart,
         int128 durationGrowth,

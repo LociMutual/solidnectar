@@ -39,34 +39,41 @@ abstract contract AllocationControl is AccessControl {
         _grantRole(ALLOCATOR_ROLE, msg.sender);
     }
 
+    // Declares or adjusts a single allocation.
+    //
     // 0. clear counters
     // 1. alter existing, recount units
     // 2. add new, count new units
-    // 3. remove undeclared allocations only if not yet minted
+    // 3. remove zeroed-out allocations only if not yet minted
     //
     function allocationAllocate(bytes32 role, uint256 tokenId, uint256 units)
         public
         onlyRole(ALLOCATOR_ROLE)
     {
-        if (_roles.contains(role)) {
-            // existing
-            if (_allocations[role].minted > 0) {
-                require(units >= _allocations[role].minted, "reallocation must include already minted slice");
-                require(tokenId == _allocations[role].tokenId, "cannot change allocation's tokenId if already minted");
-            }
-            _totalSupplyCap -= _allocations[role].units;
-            _supplyCapPerTokenId[tokenId] -= _allocations[role].units;
-            _totalSupplyCap += units;
-            _supplyCapPerTokenId[tokenId] += units;
-            _allocations[role].units = units;
+        _allocationAllocate(role, tokenId, units);
+    }
+
+    // Declares and/or adjusts multiple allocations and checks the resulting totalSuppyCap.
+    //
+    function allocationAllocate(bytes32[] calldata roles, uint256[] calldata tokenIds, uint256[] calldata units, uint256 totalSupplyCap)
+        public
+        onlyRole(ALLOCATOR_ROLE)
+    {
+        for (uint i = 0; i < roles.length; ++i) {
+            _allocationAllocate(roles[i], tokenIds[i], units[i]);
         }
-        else {
-            // new
-            _roles.add(role);
-            _setRoleAdmin(role, ALLOCATOR_ROLE);
-            _totalSupplyCap += units;
-            _supplyCapPerTokenId[tokenId] += units;
-            _allocations[role] = Slice(tokenId, units, 0);
+        require(totalSupplyCap == _totalSupplyCap, "unexpected resulting total supply cap");
+    }
+
+    // Set a number of allocation roles at once for claimants and/or operators.
+    // Otherwise use AccessControl.grantRole
+    //
+    function allocationSetRoles(bytes32[] calldata roles, address[] calldata accounts)
+        public
+        onlyRole(ALLOCATOR_ROLE)
+    {
+        for (uint i = 0; i < roles.length; ++i) {
+            _grantRole(roles[i], accounts[i]);
         }
     }
 
@@ -103,6 +110,31 @@ abstract contract AllocationControl is AccessControl {
         returns (uint256)
     {
         return _supplyCapPerTokenId[tokenId];
+    }
+
+    function _allocationAllocate(bytes32 role, uint256 tokenId, uint256 units)
+        internal
+    {
+        if (_roles.contains(role)) {
+            // existing
+            if (_allocations[role].minted > 0) {
+                require(units >= _allocations[role].minted, "reallocation must include already minted slice");
+                require(tokenId == _allocations[role].tokenId, "cannot change allocation's tokenId if already minted");
+            }
+            _totalSupplyCap -= _allocations[role].units;
+            _supplyCapPerTokenId[tokenId] -= _allocations[role].units;
+            _totalSupplyCap += units;
+            _supplyCapPerTokenId[tokenId] += units;
+            _allocations[role].units = units;
+        }
+        else {
+            // new
+            _roles.add(role);
+            _setRoleAdmin(role, ALLOCATOR_ROLE);
+            _totalSupplyCap += units;
+            _supplyCapPerTokenId[tokenId] += units;
+            _allocations[role] = Slice(tokenId, units, 0);
+        }
     }
 
     function _onAllocationMint(bytes32 role, uint256 amount)
