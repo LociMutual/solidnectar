@@ -59,7 +59,7 @@ contract LG is ERC1155Votes, AccessControl, AllocationControl, EmissionCurves, I
     bytes32 public constant LAUNCH_C4_ALLOCATION        = keccak256("LAUNCH_C4_ALLOCATION");
 
     constructor(address governor, string memory baseURI)
-        ERC1155Votes("Loci Global", "LG4", baseURI, 2)
+        ERC1155Votes("Loci Global", "LG", baseURI, 2)
         AllocationControl(governor)
         EmissionCurves(governor)
     {
@@ -74,7 +74,7 @@ contract LG is ERC1155Votes, AccessControl, AllocationControl, EmissionCurves, I
         _allocationAllocate(         PIONEER_ALLOCATION, 0,  20_000_000 * 1e18);
         _allocationAllocate(          NECTAR_ALLOCATION, 0,  15_100_000 * 1e18);
         _allocationAllocate(  DAO_FOUNDATION_ALLOCATION, 0,  11_650_000 * 1e18);
-        _allocationAllocate(DAO_FOUNDATION_Y_ALLOCATION, 1,     350_000 * 1e18);
+        _allocationAllocate(DAO_FOUNDATION_Y_ALLOCATION, 1,     350_000 * 1e18); // enhanced voting power
 
         // Legacy & Seed Investors
 
