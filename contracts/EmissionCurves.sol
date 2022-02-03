@@ -90,7 +90,7 @@ contract EmissionCurves is AccessControl {
         // area under growth era = ∫(-1, 0) e^(expGrowth * t) dt
         //                       = (1 - e^-expGrowth / expGrowth
         //
-        int128 I_growth = uint256(1).fromUInt().sub(expGrowth.neg().exp()).div(expGrowth);
+        int128 I_growth = expGrowth == 0 ? int128(0) : uint256(1).fromUInt().sub(expGrowth.neg().exp()).div(expGrowth);
 
         // After the growth phase, max emissions occur for the given duration.
         //
@@ -104,7 +104,7 @@ contract EmissionCurves is AccessControl {
         // area under decay era = ∫(0, 1) e^-(expDecay * t) dt
         //                      = (1 - e^-expDecay) / expDecay
         //
-        int128 I_decay = uint256(1).fromUInt().sub(expDecay.neg().exp()).div(expDecay);
+        int128 I_decay = expDecay == 0 ? int128(0) : uint256(1).fromUInt().sub(expDecay.neg().exp()).div(expDecay);
 
         _curves[role] = Curve(
             timeStart,

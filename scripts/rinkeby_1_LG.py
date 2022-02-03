@@ -16,5 +16,5 @@ def main():
     }
 
     lg = LG.deploy(governor, "ipfs://QmboBADQ1G8gRe42fQzXoLeYvNj2D78xfB2nwx4swkyYf2/{id}.json", sig, publish_source=True)
-    auction = Auction.deploy(governor, lg, lg.AUCTION22_ALLOCATION(), 900, governor, sig, publish_source=True)
+    auction = Auction.deploy(governor, lg, lg.AUCTION22_ALLOCATION(), 3600, governor, sig, publish_source=True)
     lg.grantRole(lg.AUCTION22_ALLOCATION(), auction)
