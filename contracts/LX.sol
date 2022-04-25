@@ -1,29 +1,30 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.2;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
-import "../interfaces/IGLX20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20FlashMint.sol";
+import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import "../interfaces/ILX20.sol";
 
-// 1,000,000,000 minted on L1, bridged to SKALE by admin account, and deposited in L2 LGX_Treasury.
+// AccessControl is needed to allow registration of a layer 2 minter,
+// otherwise an Owner model would have been cheaper/easier.
+//
+contract LX is ERC20, ERC20Permit, ERC20FlashMint, Ownable, ERC165, ILX20 {
 
-contract LGX is ERC20, AccessControl, ERC20Permit, ILGX20 {
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-
-    constructor(string memory name, string memory symbol)
+    constructor(address owner, string memory name, string memory symbol)
         ERC20(name, symbol)
         ERC20Permit(name)
     {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(MINTER_ROLE, msg.sender);
+        _transferOwnership(owner);
     }
 
     function mint(address to, uint256 amount)
         public
         override
-        onlyRole(MINTER_ROLE)
+        onlyOwner
     {
         _mint(to, amount);
     }
@@ -55,7 +56,7 @@ contract LGX is ERC20, AccessControl, ERC20Permit, ILGX20 {
         public
         override
     {
-        if (!hasRole(MINTER_ROLE, msg.sender)) {
+        if (msg.sender != owner()) {
             uint256 currentAllowance = allowance(account, msg.sender);
             require(currentAllowance >= amount, "ERC20: burn amount exceeds allowance");
             unchecked {
@@ -63,5 +64,13 @@ contract LGX is ERC20, AccessControl, ERC20Permit, ILGX20 {
             }
         }
         _burn(account, amount);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
+        return interfaceId == type(IERC20).interfaceId
+            || interfaceId == type(IERC20Metadata).interfaceId
+            || interfaceId == type(IERC20Permit).interfaceId
+            || interfaceId == type(IERC3156FlashLender).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 }

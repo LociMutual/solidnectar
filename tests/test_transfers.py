@@ -3,7 +3,7 @@ from web3 import Web3
 import pytest
 
 def test_transfer(admin, accounts, adminSig, governorSig, lg):
-    RESERVE = lg.RESERVED_ALLOCATION()
+    RESERVE = lg.RESERVE_ALLOCATION()
     lg.grantRole(RESERVE, admin, governorSig)
     lg.allocationMint(admin, RESERVE, 10e18, adminSig)
     lg.transfer(accounts[1], 2e18, adminSig)

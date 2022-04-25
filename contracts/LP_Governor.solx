@@ -8,9 +8,19 @@ import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
 import "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 
-contract LGGovernor is Governor, GovernorCompatibilityBravo, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
-    constructor(ERC20Votes _token, TimelockController _timelock)
-        Governor("LG_Governor")
+contract LP_Governor is Governor, GovernorCompatibilityBravo, GovernorVotes, GovernorVotesQuorumFraction, GovernorTimelockControl {
+    // one contract deployed per real estate project.
+
+    // receives fees from origination of LUSD, LB, etc.
+    // receiees income from automated trading (liquidity in swap pools)
+
+    // pays SKL to keep chain running
+    // pays engineers
+    // pays trustee?  Who dat?
+    // net cash flows into LG Treasury
+
+    constructor(IVotes _token, TimelockController _timelock)
+        Governor("LP_Governor")
         GovernorVotes(_token)
         GovernorVotesQuorumFraction(4)
         GovernorTimelockControl(_timelock)

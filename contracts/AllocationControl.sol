@@ -11,10 +11,7 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 abstract contract AllocationControl is AccessControl {
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
-    // ALLOCATOR_ADMIN_ROLE may determine who can grant/revoke ALLOCATOR_ROLE.
-    bytes32 public constant ALLOCATOR_ADMIN_ROLE = keccak256("ALLOCATOR_ADMIN_ROLE");
-
-    // ALLOCATOR_ROLE may set allocations.
+    // ALLOCATOR_ROLE is the admin for granting allocation roles.
     bytes32 public constant ALLOCATOR_ROLE = keccak256("ALLOCATOR_ROLE");
 
     // Other roles are defined dynamically to enable per-slice minting privileges.
@@ -32,70 +29,11 @@ abstract contract AllocationControl is AccessControl {
     mapping(uint256 => uint256) private _supplyCapPerTokenId;
     uint256 private _totalSupplyCap;
 
-    constructor(address governor) {
-        _setRoleAdmin(ALLOCATOR_ROLE, ALLOCATOR_ADMIN_ROLE);
-        _grantRole(ALLOCATOR_ADMIN_ROLE, governor);
-        _grantRole(ALLOCATOR_ROLE, governor);
-        _grantRole(ALLOCATOR_ROLE, msg.sender);
-    }
-
-    // Declares or adjusts a single allocation.
-    //
-    // 0. clear counters
-    // 1. alter existing, recount units
-    // 2. add new, count new units
-    // 3. remove zeroed-out allocations only if not yet minted
-    //
-    function allocationAllocate(bytes32 role, uint256 tokenId, uint256 units)
-        public
-        onlyRole(ALLOCATOR_ROLE)
-    {
-        _allocationAllocate(role, tokenId, units);
-    }
-
-    // Declares and/or adjusts multiple allocations and checks the resulting totalSuppyCap.
-    //
-    function allocationAllocate(bytes32[] calldata roles, uint256[] calldata tokenIds, uint256[] calldata units, uint256 totalSupplyCap)
-        public
-        onlyRole(ALLOCATOR_ROLE)
-    {
-        for (uint i = 0; i < roles.length; ++i) {
-            _allocationAllocate(roles[i], tokenIds[i], units[i]);
-        }
-        require(totalSupplyCap == _totalSupplyCap, "unexpected resulting total supply cap");
-    }
-
-    // Set a number of allocation roles at once for claimants and/or operators.
-    // Otherwise use AccessControl.grantRole
-    //
-    function allocationSetRoles(bytes32[] calldata roles, address[] calldata accounts)
-        public
-        onlyRole(ALLOCATOR_ROLE)
-    {
-        for (uint i = 0; i < roles.length; ++i) {
-            _grantRole(roles[i], accounts[i]);
-        }
-    }
-
     function allocationSlice(bytes32 role)
         public view
         returns (Slice memory)
     {
         return _allocations[role];
-    }
-
-    function allocationUnits(bytes32 role)
-        public view
-        returns (uint256)
-    {
-        return _allocations[role].units;
-    }
-
-    function allocationUnitsMinted(bytes32 role)
-        public view
-        returns (uint256)
-    {
-        return _allocations[role].minted;
     }
 
     function allocationTotalSupplyCap()
@@ -112,6 +50,13 @@ abstract contract AllocationControl is AccessControl {
         return _supplyCapPerTokenId[tokenId];
     }
 
+    // Declares or adjusts a single allocation.
+    //
+    // 0. clear counters
+    // 1. alter existing, recount units
+    // 2. add new, count new units
+    // 3. remove zeroed-out allocations only if not yet minted
+    //
     function _allocationAllocate(bytes32 role, uint256 tokenId, uint256 units)
         internal
     {

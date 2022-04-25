@@ -2,16 +2,13 @@
 
 pragma solidity ^0.8.4;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import '@openzeppelin/contracts/security/Pausable.sol';
-import "../interfaces/IAllocationMinter.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "../interfaces/IAllocationMinter.sol";
 
-contract Auction is AccessControl, Pausable {
+contract Auction is Ownable, Pausable {
     using SafeMath for uint;
-
-    bytes32 public constant AUCTIONEER_ADMIN_ROLE = keccak256("AUCTIONEER_ADMIN_ROLE");
-    bytes32 public constant AUCTIONEER_ROLE = keccak256("AUCTIONEER_ROLE");
 
     IAllocationMinter public immutable token;
     bytes32 public immutable allocationRole;
@@ -48,17 +45,15 @@ contract Auction is AccessControl, Pausable {
     event Contribution(address indexed payer, address indexed member, uint auction, uint units, uint dailyTotal);
     event Claim(address indexed caller, address indexed member, uint auction, uint value, uint remaining);
 
-    constructor(address governor, IAllocationMinter token_, bytes32 allocationRole_, uint secondsPerAuction_, address payable destAddress_) {
+    constructor(address payable daoMultisig, IAllocationMinter token_, bytes32 allocationRole_, uint secondsPerAuction_) {
+        require(address(daoMultisig) != address(0), "Invalid daoMultisig address");
         require(address(token_) != address(0), "Invalid token_ address");
-        require(address(destAddress_) != address(0), "Invalid destAddress_");
 
-        _setRoleAdmin(AUCTIONEER_ROLE, AUCTIONEER_ADMIN_ROLE);
-        _grantRole(AUCTIONEER_ADMIN_ROLE, governor);
-        _grantRole(AUCTIONEER_ROLE, msg.sender);
+        _transferOwnership(daoMultisig);
 
         token = token_;
         allocationRole = allocationRole_;
-        destAddress = destAddress_;
+        destAddress = daoMultisig;
         secondsPerAuction = secondsPerAuction_;
         currentAuction = 1;
         currentAuctionEndTime = block.timestamp + secondsPerAuction;
@@ -68,9 +63,9 @@ contract Auction is AccessControl, Pausable {
         auctionSupplyRemaining[currentAuction] = available;
     }
 
-    function setDestination(address payable destAddress_)
+    function setDestAddress(address payable destAddress_)
         public
-        onlyRole(AUCTIONEER_ROLE)
+        onlyOwner()
     {
         require(address(destAddress_) != address(0), "invalid destAddress_");
         destAddress = destAddress_;
@@ -99,6 +94,7 @@ contract Auction is AccessControl, Pausable {
 
     function claim()
         external
+        whenNotPaused
         returns (uint value)
     {
         _checkpoint();
@@ -142,7 +138,7 @@ contract Auction is AccessControl, Pausable {
 
     function pause()
         public
-        onlyRole(AUCTIONEER_ROLE)
+        onlyOwner()
         whenNotPaused
     {
         _pause();
@@ -150,7 +146,7 @@ contract Auction is AccessControl, Pausable {
 
     function unpause()
         public
-        onlyRole(AUCTIONEER_ROLE)
+        onlyOwner()
         whenPaused
     {
         _unpause();

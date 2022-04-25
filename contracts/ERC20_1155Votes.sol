@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.2;
+pragma solidity ^0.8.4;
 
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/draft-EIP712.sol";
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/draft-IERC20Permit.sol";
 
 /**
  * @dev Extension of ERC1155 to support Compound-like voting and delegation. This version is more generic than
@@ -28,7 +29,7 @@ import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
  * Enabling self-delegation can easily be done by overriding the {delegates} function. Keep in mind however that this
  * will significantly increase the base gas cost of transfers.
  */
-contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
+contract ERC20_1155Votes is ERC1155Supply, EIP712, IERC20Metadata, IERC20Permit {
     using Counters for Counters.Counter;
 
     uint256 private _n;               // number of token ids (share classes)
@@ -53,11 +54,14 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
     bytes32 private constant _DELEGATION_TYPEHASH =
         keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
 
+    bytes32 private immutable _PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
     mapping(address => address) private _delegates;
     mapping(address => Checkpoint[]) private _checkpoints;
-    Checkpoint[] private _totalSupplyCheckpoints;
+    Checkpoint[] private _totalPowerCheckpoints;
 
-    mapping(address => Counters.Counter) private _nonces;
+    mapping(address => Counters.Counter) internal _nonces;
 
     // for ERC20 transfers only, not used for ERC1155 transfers
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -142,10 +146,8 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
      * @dev Approve transfers of up to `amount` of default token.
      */
     function approve(address spender, uint256 amount) external override returns (bool) {
-        require(spender != address(0), "ERC20: transfer to the zero address");
-        require(amount == 0 || _allowances[msg.sender][spender] == 0, "ERC20: potential double approval exploit");
-        _allowances[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
+        require(amount == 0 || _allowances[msg.sender][spender] == 0, "ERC20_1155Votes: potential double approval exploit");
+        _approve(msg.sender, spender, amount);
         return true;
     }
 
@@ -163,7 +165,7 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
      * @dev Transfer `amount` of common shares (token id == 0) from `from` account to `to` account.
      */
     function transferFrom(address from, address to, uint256 amount) external override returns (bool) {
-        require(_allowances[msg.sender][from] >= amount, "ERC20: transfer exceeds allowance");
+        require(_allowances[msg.sender][from] >= amount, "ERC20_1155Votes: transfer exceeds allowance");
         _safeTransferFrom(from, to, _defaultToken[msg.sender], amount, "");
         // secondary event for the ERC20 interface
         emit Transfer(from, to, amount);
@@ -173,7 +175,7 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
     /**
      * @dev Get the voing power of an amount of tokens.
      */
-    function votingPower(uint256 id, uint256 amount) public view virtual returns (uint256) {
+    function votingPower(uint256 /*id*/, uint256 amount) public view virtual returns (uint256) {
         return amount;
     }
 
@@ -214,7 +216,7 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
      * - `blockNumber` must have been already mined
      */
     function getPastVotes(address account, uint256 blockNumber) public view returns (uint256) {
-        require(blockNumber < block.number, "ERC1155Votes: block not yet mined");
+        require(blockNumber < block.number, "ERC20_1155Votes: block not yet mined");
         return _checkpointsLookup(_checkpoints[account], blockNumber);
     }
 
@@ -227,8 +229,8 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
      * - `blockNumber` must have been already mined
      */
     function getPastTotalSupply(uint256 blockNumber) public view returns (uint256) {
-        require(blockNumber < block.number, "ERC1155Votes: block not yet mined");
-        return _checkpointsLookup(_totalSupplyCheckpoints, blockNumber);
+        require(blockNumber < block.number, "ERC20_1155Votes: block not yet mined");
+        return _checkpointsLookup(_totalPowerCheckpoints, blockNumber);
     }
 
     /**
@@ -278,15 +280,27 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
         bytes32 r,
         bytes32 s
     ) public virtual {
-        require(block.timestamp <= expiry, "ERC1155Votes: signature expired");
+        require(block.timestamp <= expiry, "ERC20_1155Votes: signature expired");
         address signer = ECDSA.recover(
             _hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, delegatee, nonce, expiry))),
             v,
             r,
             s
         );
-        require(nonce == _useNonce(signer), "ERC1155Votes: invalid nonce");
+        require(nonce == _useNonce(signer), "ERC20_1155Votes: invalid nonce");
         _delegate(signer, delegatee);
+    }
+
+    function _approve(
+        address owner,
+        address spender,
+        uint256 amount
+    ) internal virtual {
+        require(owner != address(0), "ERC20_1155Votes: approve from the zero address");
+        require(spender != address(0), "ERC20_1155Votes: approve to the zero address");
+
+        _allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
     }
 
     /**
@@ -302,9 +316,16 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
     function _mint(address account, uint256 id, uint256 amount, bytes memory data) internal virtual override {
         super._mint(account, id, amount, data);
         _aggregateSupply += amount;
-        require(_aggregateSupply <= _maxSupply(), "ERC1155Votes: total supply risks overflowing votes");
+        require(_aggregateSupply <= _maxSupply(), "ERC20_1155Votes: total supply risks overflowing votes");
 
-        _writeCheckpoint(_totalSupplyCheckpoints, _add, votingPower(id, amount));
+        uint256 power = votingPower(id, amount);
+        address delegate_ = delegates(account);
+        if (delegate_ != address(0)) {
+            (uint256 oldWeight, uint256 newWeight) = _writeCheckpoint(_checkpoints[delegate_], _add, power);
+            emit DelegateVotesChanged(delegate_, oldWeight, newWeight);
+        }
+
+        _writeCheckpoint(_totalPowerCheckpoints, _add, power);
         emit Transfer(address(0), account, amount);
     }
 
@@ -315,7 +336,14 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
         super._burn(account, id, amount);
         _aggregateSupply -= amount;
 
-        _writeCheckpoint(_totalSupplyCheckpoints, _subtract, votingPower(id, amount));
+        uint256 power = votingPower(id, amount);
+        address delegate_ = delegates(account);
+        if (delegate_ != address(0)) {
+            (uint256 oldWeight, uint256 newWeight) = _writeCheckpoint(_checkpoints[delegate_], _subtract, power);
+            emit DelegateVotesChanged(delegate_, oldWeight, newWeight);
+        }
+
+        _writeCheckpoint(_totalPowerCheckpoints, _subtract, power);
         emit Transfer(account, address(0), amount);
     }
 
@@ -350,15 +378,15 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
      */
     function _delegate(address delegator, address delegatee) internal virtual {
         address currentDelegate = delegates(delegator);
-        uint256 delegatorBalance = 0;
-        for (uint32 id = 0; id < _n; ++id) {
-            delegatorBalance += votingPower(id, balanceOf(delegator, id));
+        uint256 power = 0;
+        for (uint256 id = 0; id < _n; ++id) {
+            power += votingPower(id, balanceOf(delegator, id));
         }
         _delegates[delegator] = delegatee;
 
         emit DelegateChanged(delegator, currentDelegate, delegatee);
 
-        _moveVotingPower(currentDelegate, delegatee, delegatorBalance);
+        _moveVotingPower(currentDelegate, delegatee, power);
     }
 
     function _moveVotingPower(
@@ -371,7 +399,6 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
                 (uint256 oldWeight, uint256 newWeight) = _writeCheckpoint(_checkpoints[src], _subtract, amount);
                 emit DelegateVotesChanged(src, oldWeight, newWeight);
             }
-
             if (dst != address(0)) {
                 (uint256 oldWeight, uint256 newWeight) = _writeCheckpoint(_checkpoints[dst], _add, amount);
                 emit DelegateVotesChanged(dst, oldWeight, newWeight);
@@ -390,7 +417,8 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
 
         if (pos > 0 && ckpts[pos - 1].fromBlock == block.number) {
             ckpts[pos - 1].votes = SafeCast.toUint224(newWeight);
-        } else {
+        }
+        else {
             ckpts.push(Checkpoint({fromBlock: SafeCast.toUint32(block.number), votes: SafeCast.toUint224(newWeight)}));
         }
     }
@@ -412,11 +440,53 @@ contract ERC1155Votes is ERC1155Supply, EIP712, IERC20Metadata {
         nonce.increment();
     }
 
+    // EIP-2612 IERC20Permit -------------------------------------------------
+
+    /**
+     * @dev See {IERC20Permit-permit}.
+     */
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual override {
+        require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
+
+        bytes32 structHash = keccak256(abi.encode(_PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline));
+
+        bytes32 hash = _hashTypedDataV4(structHash);
+
+        address signer = ECDSA.recover(hash, v, r, s);
+        require(signer == owner, "ERC20Permit: invalid signature");
+
+        _approve(owner, spender, value);
+    }
+
+    /**
+     * @dev See {IERC20Permit-nonces}.
+     */
+    function nonces(address owner) public view virtual override returns (uint256) {
+        return _nonces[owner].current();
+    }
+
+    /**
+     * @dev See {IERC20Permit-DOMAIN_SEPARATOR}.
+     */
+    // solhint-disable-next-line func-name-mixedcase
+    function DOMAIN_SEPARATOR() external view override returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
     /**
      * @dev See {IERC165-supportsInterface}.
      */
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
+            interfaceId == type(IERC20Permit).interfaceId ||
             interfaceId == type(IERC20).interfaceId ||
             interfaceId == type(IERC20Metadata).interfaceId ||
             super.supportsInterface(interfaceId);

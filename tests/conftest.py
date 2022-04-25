@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import pytest
-from brownie import accounts, chain
+from brownie import accounts, chain, Contract, project
 
 @pytest.fixture(scope="function", autouse=True)
 def isolate(fn_isolation):
@@ -30,16 +30,72 @@ def treasury():
     return accounts[8]
 
 @pytest.fixture(scope="module")
-def lg(adminSig, LG, governor):
-    return LG.deploy(governor, "ipfs://QmboBADQ1G8gRe42fQzXoLeYvNj2D78xfB2nwx4swkyYf2/{id}.json", adminSig)
+def lg(adminSig, LG, governor, EmissionCurves):
+    EmissionCurves.deploy(adminSig)
+    return LG.deploy(governor, adminSig)
 
 @pytest.fixture(scope="module")
-def auction(adminSig, governor, treasury, lg, Auction):
-    a = Auction.deploy(governor, lg, lg.AUCTION22_ALLOCATION(), 900, treasury, adminSig)
-    lg.grantRole(lg.AUCTION22_ALLOCATION(), a)
+def auction(adminSig, governor, lg, Auction, governorSig):
+    a = Auction.deploy(governor, lg, lg.ANON_ALLOCATION(), 900, adminSig)
+    lg.grantRole(lg.ANON_ALLOCATION(), a, governorSig)
     return a
+
+@pytest.fixture(scope="module")
+def USDC(admin, MockERC20, adminSig):
+    t = MockERC20.deploy('Fake USDC', 'USDC', adminSig)
+    addLiquidity(t, 2800e18, admin, 1e15)
+    return t
+
+@pytest.fixture(scope="module")
+def USDT(MockERC20, adminSig):
+    return MockERC20.deploy('Fake USDT', 'USDT', adminSig)
+
+@pytest.fixture(scope="module")
+def DAI(MockERC20, adminSig):
+    return MockERC20.deploy('Fake DAI', 'DAI', adminSig)
+
+@pytest.fixture(scope="module")
+def lx(admin, adminSig, LX_Treasury, USDC, USDT, DAI):
+    return LX_Treasury.deploy(
+        admin,
+        'Loci USD',
+        'LUSD',
+        [USDC, USDT, DAI],
+        [5000, 3000, 2000], # reserve targets
+        [95, 97],           # minmax reserves
+        [0, 0],             #        pooled
+        [111, 300],         #        origination fee
+        [  0, 111],         #        redemption fee
+        111,                # flash loan fee
+        adminSig)
 
 def approx(a, b, precision=1e-15):
     if a == b == 0:
         return True
     return 2 * abs(a - b) / (a + b) <= precision
+
+def addLiquidity(token, price, account, value):
+    amount = value * price / 1e18;
+    token.mint(account, amount, {'from': account});
+
+    WETH9 = project.SmartProject.interface.IERC20(token.WETH9())
+    account.transfer(WETH9, value)
+    assert WETH9.balanceOf(account) >= value
+
+    positions = project.SmartProject.interface.INonfungiblePositionManager(token.positions())
+    WETH9.approve(positions, value, {'from': account});
+
+    positions.mint(list({
+        'token0': token.WETH9(),
+        'token1': token,
+        'fee': token.poolFee(),
+        'tickLower': -887272,
+        'tickUpper':  887272,
+        'amount0Desired': value,
+        'amount1Desired': amount,
+        'amount0Min': 0,
+        'amount1Min': 0,
+        'recipient': account,
+        'deadline': chain.time() + 60
+    }.values()),
+    {'from': account})

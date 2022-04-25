@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.7;
 
-import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./ABDKMath64x64.sol";
 
 // Some hints to help with the math:
@@ -19,15 +18,9 @@ import "./ABDKMath64x64.sol";
 /**
  * @dev declare and safegaurd token allocations among a number of slices.
  */
-contract EmissionCurves is AccessControl {
+library EmissionCurves {
     using ABDKMath64x64 for int128;
     using ABDKMath64x64 for uint256;
-
-    // ALLOCATION_ADMIN_ROLE may determine who can grant/revoke ALLOCATION_ROLE.
-    bytes32 public constant EMISSION_ADMIN_ROLE = keccak256("EMISSION_ADMIN_ROLE");
-
-    // ALLOCATION_ROLE may set allocation.
-    bytes32 public constant EMISSION_ROLE = keccak256("EMISSION_ROLE");
 
     struct Curve {
         int128 timeStart;       // time of emission start as 64.64 seconds
@@ -39,42 +32,7 @@ contract EmissionCurves is AccessControl {
         int128 A;               // area under entire envelope in world units
     }
 
-    mapping(bytes32 => Curve) _curves;
-
-    event NewCurve(bytes32 role, Curve curve);
-    event Calc(uint256 timestamp, uint64 a, uint64 b);
-
-    constructor(address governor) {
-        _setRoleAdmin(EMISSION_ROLE, EMISSION_ADMIN_ROLE);
-        _grantRole(EMISSION_ADMIN_ROLE, governor);
-        _grantRole(EMISSION_ROLE, governor);
-        _grantRole(EMISSION_ROLE, msg.sender);
-    }
-
-    function setCurve(
-        bytes32 role,
-        uint256 timeStart,
-        uint32 durationGrowth,
-        uint8 expGrowth,
-        uint32 durationMax,
-        uint32 durationDecay,
-        uint8 expDecay
-    )
-        public
-        onlyRole(EMISSION_ROLE)
-    {
-        _setCurve64x64(
-            role,
-            timeStart.fromUInt(),
-            uint256(durationGrowth).fromUInt(),
-            uint256(expGrowth).fromUInt().div(uint256(10).fromUInt()),
-            uint256(durationMax).fromUInt(),
-            uint256(durationDecay).fromUInt(),
-            uint256(expDecay).fromUInt().div(uint256(10).fromUInt()));
-    }
-
-    function _setCurve(
-        bytes32 role,
+    function newCurve(
         uint256 timeStart,
         uint32 durationGrowth,
         uint8 expGrowth,
@@ -83,9 +41,10 @@ contract EmissionCurves is AccessControl {
         uint8 expDecay
     )
         internal
+        pure
+        returns (Curve memory)
     {
-        _setCurve64x64(
-            role,
+        return newCurve64x64(
             timeStart.fromUInt(),
             uint256(durationGrowth).fromUInt(),
             uint256(expGrowth).fromUInt().div(uint256(10).fromUInt()),
@@ -94,8 +53,7 @@ contract EmissionCurves is AccessControl {
             uint256(expDecay).fromUInt().div(uint256(10).fromUInt()));
     }
 
-    function _setCurve64x64(
-        bytes32 role,
+    function newCurve64x64(
         int128 timeStart,
         int128 durationGrowth,
         int128 expGrowth,
@@ -103,7 +61,9 @@ contract EmissionCurves is AccessControl {
         int128 durationDecay,
         int128 expDecay
     )
-        private
+        internal
+        pure
+        returns (Curve memory)
     {
         // It is easiest to treat the time of max emission as t=0 and growth phase
         // occuring before t=0 to avoid dealing with the asymptotic coming from -∞.  
@@ -127,7 +87,7 @@ contract EmissionCurves is AccessControl {
         //
         int128 I_decay = expDecay == 0 ? int128(0) : uint256(1).fromUInt().sub(expDecay.neg().exp()).div(expDecay);
 
-        _curves[role] = Curve(
+        return Curve(
             timeStart,
             durationGrowth,
             expGrowth,
@@ -136,16 +96,12 @@ contract EmissionCurves is AccessControl {
             expDecay,
             I_growth.mul(durationGrowth).add(durationMax).add(I_decay.mul(durationDecay))
         );
-
-        emit NewCurve(role, _curves[role]);
     }
 
-    function calcGrowth(bytes32 role, uint256 timestamp)
-        public view
+    function calcGrowth(Curve storage curve, uint256 timestamp)
+        internal view
         returns (int128)
     {
-        Curve storage curve = _curves[role];
-
         // time elapsed since curve start    
         int128 t = timestamp.fromUInt().sub(curve.timeStart);
         if (t < 0) {
